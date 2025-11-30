@@ -1,0 +1,329 @@
+<!-- ARL Challan - Single A4 Page (Top: Hire Challan, Bottom: Receiver Copy)
+Features in this version:
+- Single A4 page split into two halves (top = hire challan, bottom = receiver copy)
+- Charges reduced to only Hire Amount; amount-in-words auto-generated
+- Print-optimized for A4 (uses CSS @page and print styles)
+- Preview, Save to localStorage, History, Export PDF
+- Upload logo & signatures
+- Instructions below show how to host (create a URL) using GitHub Pages or Netlify
+Note: This is still a single-file client-side app. For a URL usable on multiple devices you must host this file (instructions below).
+-->
+
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ARL - Single Page Challan</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.9.3/html2pdf.bundle.min.js"></script>
+<style>
+:root{--brand:#8b2e12;--accent:#ffb34d;--muted:#6b7280}
+body{font-family:Inter,Arial,Helvetica,sans-serif;background:#f3f5f8;padding:18px;color:#222}
+.topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.container{display:flex;gap:18px}
+.panel{width:360px;background:#fff;padding:16px;border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,0.06)}
+.preview{flex:1}
+.btn{background:var(--brand);color:#fff;padding:8px 12px;border-radius:8px;border:0;cursor:pointer;margin-top:8px}
+.btn.secondary{background:#eef2f1;color:#000}
+.small{font-size:13px;color:var(--muted)}
+
+/* Printable page: A4 portrait. We'll render a single .a4 element sized for print */
+.a4{width:794px; /* 210mm @96dpi approx */
+      min-height:1123px; /* 297mm */
+      background:#fff;margin:0 auto;border:2px solid #d9c3b7;padding:14px;box-sizing:border-box;position:relative}
+.split{height:50%;box-sizing:border-box;padding:10px;border-bottom:2px dashed #e9e2da}
+.split.bottom{border-bottom:none;border-top:2px dashed #e9e2da}
+.watermark{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:110px;color:var(--accent);opacity:0.08;font-weight:800;pointer-events:none}
+.header{display:flex;align-items:center;gap:12px}
+.logo{max-height:72px}
+.company{font-size:20px;font-weight:800;color:var(--brand)}
+.addr{font-size:12px;color:var(--muted)}
+.info-table{width:100%;border-collapse:collapse;margin-top:8px}
+.info-table td{padding:6px;border:1px solid #e8d9cf;font-size:13px}
+.hire-row{display:flex;gap:8px;align-items:center;margin-top:12px}
+.hire-row .amount{font-size:20px;font-weight:800;color:var(--brand)}
+.signature-row{display:flex;justify-content:space-between;margin-top:26px}
+.sig-box{text-align:center;width:30%}
+.sig-box img{max-height:64px}
+.receiver-table{width:100%;border-collapse:collapse;margin-top:8px}
+.receiver-table th, .receiver-table td{border:1px solid #e8d9cf;padding:8px;font-size:13px}
+.receiver-table th{background:#fff0e4;color:var(--brand);font-weight:700}
+
+/* Print sizing */
+@media print{
+  body{background:#fff;padding:0}
+  .panel, .topbar, .btn, .container .panel{display:none}
+  .a4{width:210mm;height:297mm;margin:0;box-shadow:none;border:0;padding:12mm}
+  .split{padding:6mm}
+}
+
+/* Responsive for preview */
+@media(max-width:1000px){.container{flex-direction:column}.panel{width:100%}.a4{width:100%;height:auto}}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div>
+    <h2 style="margin:0">ARL - Challan (Single Page)</h2>
+    <div class="small">Top half = Hire Challan • Bottom half = Receiver Copy • Print to A4</div>
+  </div>
+  <div>
+    <button id="btnPreview" class="btn">Preview</button>
+    <button id="btnPDF" class="btn">Generate PDF</button>
+    <button id="btnSave" class="btn secondary">Save</button>
+  </div>
+</div>
+
+<div class="container">
+  <div class="panel">
+    <h3>Challan Form</h3>
+    <label class="small">Challan No (leave blank for auto)</label>
+    <input id="challanNo" type="text" style="width:100%;padding:8px;margin-top:6px;border-radius:6px;border:1px solid #e6edf3">
+    <label class="small">Date</label>
+    <input id="date" type="date" style="width:100%;padding:8px;margin-top:6px;border-radius:6px;border:1px solid #e6edf3">
+    <label class="small">Lorry No</label>
+    <input id="lorryNo" type="text" style="width:100%;padding:8px;margin-top:6px;border-radius:6px;border:1px solid #e6edf3">
+    <label class="small">Driver Name</label>
+    <input id="driver" type="text" style="width:100%;padding:8px;margin-top:6px;border-radius:6px;border:1px solid #e6edf3">
+    <label class="small">Route</label>
+    <input id="route" type="text" style="width:100%;padding:8px;margin-top:6px;border-radius:6px;border:1px solid #e6edf3">
+    <label class="small">Total Weight (Ton)</label>
+    <input id="weight" type="text" style="width:100%;padding:8px;margin-top:6px;border-radius:6px;border:1px solid #e6edf3">
+
+    <label class="small">Total Articles</label>
+    <input id="articles" type="text" style="width:100%;padding:8px;margin-top:6px;border-radius:6px;border:1px solid #e6edf3">
+
+    <label class="small">Hire Amount (₹)</label>
+    <input id="hire" type="text" value="0" style="width:100%;padding:8px;margin-top:6px;border-radius:6px;border:1px solid #e6edf3">
+
+    <label class="small">Remarks</label>
+    <textarea id="remarks" style="width:100%;padding:8px;border-radius:6px;border:1px solid #e6edf3;margin-top:6px"></textarea>
+
+    <label class="small">Upload Logo</label>
+    <input id="logo" type="file" accept="image/*" style="width:100%">
+    <label class="small">Driver Signature</label>
+    <input id="sigDriver" type="file" accept="image/*" style="width:100%">
+    <label class="small">Dispatch Signature</label>
+    <input id="sigOffice" type="file" accept="image/*" style="width:100%">
+
+    <div style="margin-top:10px">
+      <button id="btnHistory" class="btn secondary">View History</button>
+    </div>
+  </div>
+
+  <div class="preview">
+    <div id="printArea">
+      <!-- Rendered preview / printable A4 area -->
+      <div id="a4" class="a4">
+        <div class="watermark">ARL</div>
+        <!-- Top half: Hire Challan -->
+        <div class="split top">
+          <div class="header">
+            <img id="p_logo" class="logo" src="" alt="logo">
+            <div class="company">ANKUSH ROADLINES</div>
+            <div class="addr">Delhi Office: 19/12, Rattan Pal, Veer Bazar Road, Near Deepanshu Builder, Nangli Poona Delhi - 110036</div>
+            <div class="addr">Head Office: H.No 14-8-416/1, Near Masjid, Jummerath Bazar, Hyderabad - 500012</div>
+          </div>
+
+          <table class="info-table" style="margin-top:10px">
+            <tr><td><strong>Challan No</strong></td><td id="p_challan"></td><td><strong>Date</strong></td><td id="p_date"></td></tr>
+            <tr><td><strong>Lorry No</strong></td><td id="p_lorry"></td><td><strong>Driver</strong></td><td id="p_driver"></td></tr>
+            <tr><td><strong>Route</strong></td><td id="p_route"></td><td><strong>Total Weight</strong></td><td id="p_weight"></td></tr>
+            <tr><td><strong>Total Articles</strong></td><td id="p_articles"></td><td></td><td></td></tr>
+          </table>
+
+          <div class="hire-row">
+            <div>
+              <div class="small">Hire Amount (₹)</div>
+              <div class="amount" id="p_hire">0</div>
+            </div>
+            <div style="flex:1">
+              <div class="small">Rupees (in words)</div>
+              <div id="p_hire_words" style="font-weight:600;color:#333"></div>
+            </div>
+          </div>
+
+          <div style="margin-top:10px" class="small">Remarks: <span id="p_remarks"></span></div>
+
+          <div class="signature-row">
+            <div class="sig-box">Driver Signature<br><img id="p_sig_driver" src="" alt=""/></div>
+            <div class="sig-box">Dispatch Office<br><img id="p_sig_office" src="" alt=""/></div>
+            <div class="sig-box">For ANKUSH ROADLINES<br><div style="height:54px"></div></div>
+          </div>
+
+      <!-- Terms & Conditions (added) -->
+      <div style="margin-top:12px;font-size:12px;color:#444;line-height:1.35;padding:10px;border:1px solid #e8d9cf;border-radius:6px;background:#fff7ef">
+        <strong style="color:var(--brand)">Terms & Conditions:</strong>
+        <ol style="padding-left:18px;margin-top:6px">
+          <li>Goods should be delivered at our Hyderabad office without delay.</li>
+          <li>All hire charges and settlement of payments will be made only at our Hyderabad office.</li>
+          <li>Driver must follow the instructed delivery route and ensure safe transportation.</li>
+          <li>Any shortage, leakage or damage noticed during transit will be the responsibility of the transporter / driver.</li>
+          <li>Company is not responsible for delays caused due to natural calamities, strikes or vehicle breakdown.</li>
+          <li>Receiver must verify weight and condition of goods at the time of receipt.</li>
+          <li>Duplicate challan must be carried by the driver until delivery confirmation.</li>
+        </ol>
+      </div>
+
+    </div>
+
+    <!-- Bottom half: Receiver Copy -->
+        <div class="split bottom">
+          <div style="text-align:center;font-weight:800;color:var(--brand);font-size:18px">RECEIVER COPY</div>
+          <table class="info-table" style="margin-top:8px">
+            <tr><td><strong>Challan No</strong></td><td id="r_challan"></td><td><strong>Date</strong></td><td id="r_date"></td></tr>
+            <tr><td><strong>Lorry No</strong></td><td id="r_lorry"></td><td><strong>Driver</strong></td><td id="r_driver"></td></tr>
+          </table>
+
+          <div class="section-title" style="margin-top:10px;font-weight:700;color:var(--brand)">Goods Received Condition</div>
+          <table class="receiver-table" style="margin-top:8px;width:100%">
+            <tr><th style="width:200px">Shortage</th><td></td></tr>
+            <tr><th>Leakage</th><td></td></tr>
+            <tr><th>Damage</th><td></td></tr>
+            <tr><th>Remarks</th><td style="height:80px"></td></tr>
+          </table>
+
+          <div class="signature-row" style="margin-top:16px">
+            <div class="sig-box">Receiver Signature & Stamp<br><div style="height:56px"></div><br>Date: ____________</div>
+            <div class="sig-box">For ANKUSH ROADLINES<br><img id="r_sig_office" src="" alt="" style="max-height:54px"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="historyPanel" style="margin-top:12px;display:none"></div>
+  </div>
+</div>
+
+<script>
+// small helper to convert numbers to words (Indian numbering system)
+function inWords(num) {
+  num = Math.floor(Number(String(num).replace(/,/g,'')) || 0);
+  if(num===0) return 'Zero Rupees Only';
+  const a = ['', 'One','Two','Three','Four','Five','Six','Seven','Eight','Nine','Ten','Eleven','Twelve','Thirteen','Fourteen','Fifteen','Sixteen','Seventeen','Eighteen','Nineteen'];
+  const b = ['', '', 'Twenty','Thirty','Forty','Fifty','Sixty','Seventy','Eighty','Ninety'];
+  function twoDigit(n){ if(n<20) return a[n]; var tens = Math.floor(n/10); var ones = n%10; return b[tens] + (ones? ' ' + a[ones]: ''); }
+  function threeDigit(n){ var hundred = Math.floor(n/100); var rest = n%100; return (hundred? a[hundred] + ' Hundred ' : '') + (rest? (rest<100? twoDigit(rest): '') : ''); }
+  // Indian place values
+  var crore = Math.floor(num/10000000); num = num%10000000;
+  var lakh = Math.floor(num/100000); num = num%100000;
+  var thousand = Math.floor(num/1000); num = num%1000;
+  var hundred = num;
+  var words = '';
+  if(crore) words += (inWordsHelper(crore) + ' Crore ');
+  if(lakh) words += (inWordsHelper(lakh) + ' Lakh ');
+  if(thousand) words += (inWordsHelper(thousand) + ' Thousand ');
+  if(hundred) words += (inWordsHelper(hundred));
+  return words.trim() + ' Rupees Only';
+  function inWordsHelper(n){ if(n<100) return twoDigit(n); if(n<1000) return a[Math.floor(n/100)] + ' Hundred ' + (n%100? twoDigit(n%100): ''); return ''; }
+}
+
+// Read image file to dataURL and store in dataset
+function readFileToDataURL(input, cb){ const f = input.files[0]; if(!f){ cb(''); return;} const r=new FileReader(); r.onload=e=>cb(e.target.result); r.readAsDataURL(f);} 
+
+// Update preview from form
+function updatePreview(){
+  const id = document.getElementById('challanNo').value || nextChallan();
+  const date = document.getElementById('date').value || new Date().toISOString().slice(0,10);
+  const lorry = document.getElementById('lorryNo').value;
+  const driver = document.getElementById('driver').value;
+  const route = document.getElementById('route').value;
+  const weight = document.getElementById('weight').value;
+  const hire = document.getElementById('hire').value || 0;
+  const remarks = document.getElementById('remarks').value;
+  const articles = document.getElementById('articles').value;
+
+  document.getElementById('p_challan').textContent = id;
+  document.getElementById('p_date').textContent = date;
+  document.getElementById('p_lorry').textContent = lorry;
+  document.getElementById('p_driver').textContent = driver;
+  document.getElementById('p_route').textContent = route;
+  document.getElementById('p_weight').textContent = weight;
+  document.getElementById('p_articles').textContent = articles;
+  document.getElementById('p_hire').textContent = Number(String(hire).replace(/,/g,'')).toLocaleString('en-IN');
+  document.getElementById('p_hire_words').textContent = inWords(hire);
+  document.getElementById('p_remarks').textContent = remarks;
+
+  // Receiver copy copies some fields
+  document.getElementById('r_challan').textContent = id;
+  document.getElementById('r_date').textContent = date;
+  document.getElementById('r_lorry').textContent = lorry;
+  document.getElementById('r_driver').textContent = driver;
+
+  // images from dataset if present
+  const logoInput = document.getElementById('logo');
+  if(logoInput.dataset.data) document.getElementById('p_logo').src = logoInput.dataset.data;
+  const sd = document.getElementById('sigDriver'); if(sd.dataset.data) document.getElementById('p_sig_driver').src = sd.dataset.data;
+  const so = document.getElementById('sigOffice'); if(so.dataset.data) { document.getElementById('p_sig_office').src = so.dataset.data; document.getElementById('r_sig_office').src = so.dataset.data; }
+}
+
+// Auto challan number sequence per year
+function nextChallan(){ const y=new Date().getFullYear(); const key='arl_seq_'+y; let seq=Number(localStorage.getItem(key)||'0')+1; localStorage.setItem(key, seq); return `ARL-${y}-${String(seq).padStart(4,'0')}` }
+
+// Hook file inputs
+['logo','sigDriver','sigOffice'].forEach(id=>{
+  const el=document.getElementById(id);
+  el.addEventListener('change', ()=>{ readFileToDataURL(el, data=>{ el.dataset.data = data || ''; updatePreview(); }); });
+});
+
+// Save current challan
+function collectForm(){ return {
+  id: document.getElementById('challanNo').value || nextChallan(),
+  date: document.getElementById('date').value || new Date().toISOString().slice(0,10),
+  lorry: document.getElementById('lorryNo').value||'',
+  driver: document.getElementById('driver').value||'',
+  route: document.getElementById('route').value||'',
+  weight: document.getElementById('weight').value||'',
+  articles: document.getElementById('articles').value||'',
+  hire: document.getElementById('hire').value||0,
+  remarks: document.getElementById('remarks').value||'',
+  logo: document.getElementById('logo').dataset.data||'',
+  sigDriver: document.getElementById('sigDriver').dataset.data||'',
+  sigOffice: document.getElementById('sigOffice').dataset.data||'',
+  savedAt: new Date().toISOString()
+ }; }
+
+function saveChallan(){ const arr=JSON.parse(localStorage.getItem('arl_challans')||'[]'); const ch=collectForm(); arr.push(ch); localStorage.setItem('arl_challans', JSON.stringify(arr)); alert('Saved: '+ch.id); renderHistory(); }
+
+// Render history list
+function renderHistory(){ const arr=JSON.parse(localStorage.getItem('arl_challans')||'[]'); const panel=document.getElementById('historyPanel'); panel.style.display='block'; panel.innerHTML='<h4>Saved Challans</h4>'; if(!arr.length){ panel.innerHTML += '<div class="small">No saved challans</div>'; return; } arr.slice().reverse().forEach((c,i)=>{ const el=document.createElement('div'); el.style.padding='8px'; el.style.borderBottom='1px solid #f0f0f0'; el.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center"><div><strong>${c.id}</strong><div class="small">${c.date} • ${c.lorry} • ${c.driver}</div></div><div><button class="btn secondary" data-idx="${i}" onclick="loadSaved(${arr.length-1-i})">Load</button><button class="btn secondary" data-pdf="${i}" onclick="downloadSaved(${arr.length-1-i})">PDF</button></div></div>`; panel.appendChild(el); }); }
+
+function loadSaved(idx){ const arr=JSON.parse(localStorage.getItem('arl_challans')||'[]'); const c=arr[idx]; document.getElementById('challanNo').value = c.id; document.getElementById('date').value = c.date; document.getElementById('lorryNo').value = c.lorry; document.getElementById('driver').value = c.driver; document.getElementById('route').value = c.route; document.getElementById('weight').value = c.weight; document.getElementById('hire').value = c.hire; document.getElementById('remarks').value = c.remarks; document.getElementById('logo').dataset.data = c.logo||''; document.getElementById('sigDriver').dataset.data = c.sigDriver||''; document.getElementById('sigOffice').dataset.data = c.sigOffice||''; updatePreview(); alert('Loaded into form. Click Preview / Save to create new.') }
+
+function downloadSaved(idx){ const arr=JSON.parse(localStorage.getItem('arl_challans')||'[]'); const c=arr[idx]; document.getElementById('challanNo').value = c.id; document.getElementById('date').value = c.date; document.getElementById('lorryNo').value = c.lorry; document.getElementById('driver').value = c.driver; document.getElementById('route').value = c.route; document.getElementById('weight').value = c.weight; document.getElementById('hire').value = c.hire; document.getElementById('remarks').value = c.remarks; document.getElementById('logo').dataset.data = c.logo||''; document.getElementById('sigDriver').dataset.data = c.sigDriver||''; document.getElementById('sigOffice').dataset.data = c.sigOffice||''; updatePreview(); setTimeout(()=>{ html2pdf().from(document.getElementById('a4')).set({margin:10,filename:c.id+'.pdf',image:{type:'jpeg',quality:0.98},html2canvas:{scale:2,useCORS:true},jsPDF:{unit:'pt',format:'a4',orientation:'portrait'}}).save(); },250); }
+
+// Generate preview and render
+document.getElementById('btnPreview').addEventListener('click', ()=>{ updatePreview(); });
+// Generate PDF (from a4 element)
+document.getElementById('btnPDF').addEventListener('click', ()=>{ updatePreview(); setTimeout(()=>{ html2pdf().from(document.getElementById('a4')).set({margin:10,filename:(document.getElementById('challanNo').value||'challan')+'.pdf',image:{type:'jpeg',quality:0.98},html2canvas:{scale:2,useCORS:true},jsPDF:{unit:'pt',format:'a4',orientation:'portrait'}}).save(); },200); });
+// Save
+document.getElementById('btnSave').addEventListener('click', ()=>{ saveChallan(); });
+// View history
+document.getElementById('btnHistory').addEventListener('click', renderHistory);
+
+// initialize
+document.getElementById('date').value = new Date().toISOString().slice(0,10);
+updatePreview();
+
+</script>
+
+<!-- Hosting instructions (copy/paste):
+To make this file available as a URL and usable on multiple devices, host it. Two easy ways:
+
+1) GitHub Pages (free)
+- Create a GitHub account if you don't have one.
+- Create a new repository (public is fine) and add this HTML file (e.g., arl_challan.html).
+- In repository Settings -> Pages -> Deploy from branch -> choose main branch and / (root) -> Save.
+- After a minute GitHub will give a URL like: https://<your-username>.github.io/<repo-name>/arl_challan.html
+
+2) Netlify (drag & drop)
+- Go to netlify.com and sign up.
+- Drag & drop this HTML file into the "Sites" area.
+- Netlify will host it and give a short URL immediately.
+
+Notes:
+- This file stores data in the browser (localStorage). If multiple users use the same URL on different devices, data will remain local to each device. To share a single database across devices you need a backend (I can provide a Node.js + SQLite sample and deployment instructions).
+-->
+
+</body>
+</html>
